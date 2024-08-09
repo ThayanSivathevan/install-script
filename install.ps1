@@ -1,24 +1,16 @@
-# Define task name and description
-$taskName = "MyPowerShellScriptTask"
-$taskDescription = "Runs a PowerShell script at startup with highest privileges and on demand"
-
-# Define the action to run the PowerShell script
-$action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-File C:\install-script.ps1"
-
-# Define the trigger to run the task at startup
-$trigger = New-ScheduledTaskTrigger -AtStartup
-
-# Define the principal to run with highest privileges
-$principal = New-ScheduledTaskPrincipal -UserId "Administrator" -LogonType ServiceAccount -RunLevel Highest
-
-# Define the settings for the task
+$scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$taskName = "shutdownserviceui"
+$filePath = "$scriptDirectory\shutdown-ui.ps1"
+$trigger = New-ScheduledTaskTrigger -AtLogon
+$currentUsername = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$principal = New-ScheduledTaskPrincipal -UserId $currentUsername -LogonType Interactive -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
 
-# Create the scheduled task
-$task = New-ScheduledTask -Action $action -Principal $principal -Trigger $trigger -Settings $settings -Description $taskDescription
 
-# Register the scheduled task
+$action = New-ScheduledTaskAction -Execute "PowerShell.exe" -Argument "-File $filePath"
+$task = New-ScheduledTask -Action $action -Principal $principal -Trigger $trigger -Settings $settings
 Register-ScheduledTask -TaskName $taskName -InputObject $task -Force
 
-# Optional: Add permission to run on demand
-Set-ScheduledTask -TaskName $taskName -User "Everyone" -RunLevel Highest
+$serviceName = "ShutdownService"
+$batchFilePath = "$scriptDirectory\shutdown.bat"
+Start-Process "sc.exe" -ArgumentList "create", $serviceName, "binPath=", "`"$batchFilePath`"", "start=", "auto" -NoNewWindow -Wait
